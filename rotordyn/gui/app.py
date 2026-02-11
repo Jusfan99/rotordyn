@@ -569,13 +569,8 @@ class RotorDynApp:
         dialog.open()
 
 
-def run(native: bool = True):
-    """Launch the NiceGUI application.
-
-    Args:
-        native: If True, open in a desktop window (pywebview).
-                If False, open in the default browser.
-    """
+def run():
+    """Launch the NiceGUI application in the default browser."""
 
     @ui.page("/")
     def main_page():
@@ -584,9 +579,8 @@ def run(native: bool = True):
 
     ui.run(
         title="RotorDyn Calculator",
-        port=0,  # auto-find open port (required for packaged exe)
+        host="127.0.0.1",
+        port=0,
         reload=False,
-        native=native,
-        window_size=(1400, 900),
         show=True,
     )
