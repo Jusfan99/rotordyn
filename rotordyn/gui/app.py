@@ -47,28 +47,34 @@ class RotorDynApp:
 
     def build_ui(self):
         """Build the complete UI layout."""
-        # Dark mode
         self.dark = ui.dark_mode(self.dark_mode)
 
-        # Custom CSS + prevent browser default drag-drop behavior
-        ui.add_head_html("""
-        <style>
-            .q-header { background: #1a1a2e !important; }
+        # Force full-viewport layout — bypass Quasar QLayout height chain
+        ui.add_head_html("""<style>
+            .q-layout, .q-page-container, .q-page {
+                height: 100vh !important;
+                min-height: 100vh !important;
+                max-height: 100vh !important;
+            }
+            .nicegui-content {
+                height: 100vh !important;
+                min-height: 100vh !important;
+                max-height: 100vh !important;
+                padding: 0 !important;
+                display: flex !important;
+                flex-direction: column !important;
+                overflow: hidden !important;
+            }
             .mode-card { transition: all 0.2s; cursor: pointer; }
             .mode-card:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
-            .mode-card.selected { border: 2px solid #2196F3 !important; }
             .summary-value { font-size: 1.1em; font-weight: 500; }
             .empty-state { opacity: 0.6; }
-        </style>
-        <script>
-            // Prevent browser from opening dropped files
-            document.addEventListener('dragover', function(e) { e.preventDefault(); });
-            document.addEventListener('drop', function(e) { e.preventDefault(); });
-        </script>
-        """)
+        </style>""")
 
-        # Header
-        with ui.header().classes("items-center justify-between px-4"):
+        # ── Top bar (plain row, NOT ui.header) ──
+        with ui.row().classes(
+            "w-full items-center justify-between px-4 text-white"
+        ).style("background:#1a1a2e; min-height:48px; flex-shrink:0"):
             ui.label("RotorDyn Calculator").classes("text-xl font-bold")
             with ui.row().classes("items-center gap-2"):
                 ui.button(icon="dark_mode", on_click=self._toggle_dark).props(
@@ -78,131 +84,138 @@ class RotorDynApp:
                     "flat round dense color=white"
                 )
 
-        # Main layout: left panel (input) + right panel (results)
-        with ui.splitter(value=35).classes("w-full h-full") as splitter:
-            with splitter.before:
+        # ── Main body: two-column layout ──
+        with ui.row().classes("w-full items-stretch").style(
+            "flex:1 1 0; min-height:0; overflow:hidden; flex-wrap:nowrap"
+        ):
+            # Left panel — input (scrollable)
+            with ui.element("div").style(
+                "width:480px; min-width:480px; overflow-y:auto; padding:16px; "
+                "border-right:1px solid rgba(128,128,128,0.3)"
+            ):
                 self._build_input_panel()
-            with splitter.after:
+
+            # Right panel — results (scrollable)
+            self.right_panel = ui.element("div").style("flex:1; overflow-y:auto")
+            with self.right_panel:
                 self._build_results_panel()
 
-        # Footer / status bar
-        with ui.footer().classes("px-4 py-1"):
+        # ── Bottom status bar (plain row, NOT ui.footer) ──
+        with ui.row().classes("w-full items-center px-4").style(
+            "min-height:28px; flex-shrink:0; "
+            "border-top:1px solid rgba(128,128,128,0.3)"
+        ):
             self.status_label = ui.label(
                 "Ready — Upload a .rin file or enter data manually"
             ).classes("text-sm")
 
     def _build_input_panel(self):
-        """Build the left input panel."""
-        with ui.scroll_area().classes("w-full h-full"):
-            with ui.column().classes("w-full p-4 gap-4"):
-                # File upload section
-                ui.label("Input Data").classes("text-lg font-bold")
+        """Build the left input panel (inside drawer)."""
+        with ui.column().classes("w-full gap-4"):
+            ui.label("Input Data").classes("text-lg font-bold")
 
+            with ui.card().classes("w-full p-4 items-center"):
+                ui.icon("upload_file", size="32px").classes("text-primary")
                 ui.upload(
-                    label="Drag & drop .rin file here (or click to browse)",
+                    label="Click to browse or drag file here",
                     on_upload=self._handle_upload,
                     auto_upload=True,
-                ).props('flat bordered').classes("w-full")
+                ).props('flat bordered color=primary').classes("w-full")
 
-                # Title
-                self.title_input = ui.input(
-                    label="Title", value=""
-                ).classes("w-full")
+            self.title_input = ui.input(
+                label="Title", value=""
+            ).classes("w-full")
 
-                # Calculation options
-                ui.separator()
-                ui.label("Calculation Options").classes("text-md font-bold")
+            ui.separator()
+            ui.label("Calculation Options").classes("text-md font-bold")
 
-                with ui.row().classes("w-full gap-2"):
-                    self.rpm_min_input = ui.number(
-                        label="RPM Min", value=0, format="%.1f"
-                    ).classes("w-1/2")
-                    self.rpm_max_input = ui.number(
-                        label="RPM Max", value=90000, format="%.1f"
-                    ).classes("w-1/2")
+            with ui.row().classes("w-full gap-2").style("flex-wrap:nowrap"):
+                self.rpm_min_input = ui.number(
+                    label="RPM Min", value=0, format="%.1f"
+                ).style("flex:1")
+                self.rpm_max_input = ui.number(
+                    label="RPM Max", value=90000, format="%.1f"
+                ).style("flex:1")
 
-                with ui.row().classes("w-full gap-2"):
-                    self.rpm_incr_input = ui.number(
-                        label="RPM Increment", value=50, format="%.1f"
-                    ).classes("w-1/2")
-                    self.n_crits_input = ui.number(
-                        label="Critical Speeds", value=15, format="%.0f"
-                    ).classes("w-1/2")
+            with ui.row().classes("w-full gap-2").style("flex-wrap:nowrap"):
+                self.rpm_incr_input = ui.number(
+                    label="RPM Increment", value=50, format="%.1f"
+                ).style("flex:1")
+                self.n_crits_input = ui.number(
+                    label="Critical Speeds", value=15, format="%.0f"
+                ).style("flex:1")
 
-                self.youngs_input = ui.number(
-                    label="Young's Modulus (psi)",
-                    value=E_DEFAULT,
-                    format="%.2E",
-                ).classes("w-full")
+            self.youngs_input = ui.number(
+                label="Young's Modulus (psi)",
+                value=E_DEFAULT,
+                format="%.2E",
+            ).classes("w-full")
 
-                # Shaft sections table
-                ui.separator()
-                ui.label("Shaft Sections").classes("text-md font-bold")
+            ui.separator()
+            ui.label("Shaft Sections").classes("text-md font-bold")
 
-                self.sections_grid = ui.aggrid({
-                    "columnDefs": [
-                        {"headerName": "#", "field": "#", "width": 60,
-                         "editable": False},
-                        {"headerName": "I (in⁴)", "field": "I (in⁴)", "width": 120,
-                         "editable": True, "type": "numericColumn",
-                         "valueFormatter": "x.value?.toExponential(2)"},
-                        {"headerName": "W (lb)", "field": "W (lb)", "width": 100,
-                         "editable": True, "type": "numericColumn",
-                         "valueFormatter": "x.value?.toFixed(1)"},
-                        {"headerName": "L (in)", "field": "L (in)", "width": 100,
-                         "editable": True, "type": "numericColumn",
-                         "valueFormatter": "x.value?.toFixed(3)"},
-                        {"headerName": "D (in)", "field": "D (in)", "width": 100,
-                         "editable": True, "type": "numericColumn",
-                         "valueFormatter": "x.value?.toFixed(3)"},
-                    ],
-                    "rowData": [],
-                    "defaultColDef": {"sortable": True, "resizable": True},
-                    "domLayout": "autoHeight",
-                }).classes("w-full")
+            self.sections_grid = ui.aggrid({
+                "columnDefs": [
+                    {"headerName": "#", "field": "#", "width": 60,
+                     "editable": False},
+                    {"headerName": "I (in⁴)", "field": "I (in⁴)", "width": 110,
+                     "editable": True, "type": "numericColumn",
+                     "valueFormatter": "x.value?.toExponential(2)"},
+                    {"headerName": "W (lb)", "field": "W (lb)", "width": 90,
+                     "editable": True, "type": "numericColumn",
+                     "valueFormatter": "x.value?.toFixed(1)"},
+                    {"headerName": "L (in)", "field": "L (in)", "width": 90,
+                     "editable": True, "type": "numericColumn",
+                     "valueFormatter": "x.value?.toFixed(3)"},
+                    {"headerName": "D (in)", "field": "D (in)", "width": 90,
+                     "editable": True, "type": "numericColumn",
+                     "valueFormatter": "x.value?.toFixed(3)"},
+                ],
+                "rowData": [],
+                "defaultColDef": {"sortable": True, "resizable": True},
+                "domLayout": "autoHeight",
+            }).classes("w-full")
 
-                with ui.row().classes("gap-2"):
-                    ui.button("Add Row", icon="add",
-                              on_click=self._add_section_row).props("flat dense")
-                    ui.button("Delete Last", icon="remove",
-                              on_click=self._del_section_row).props("flat dense")
+            with ui.row().classes("gap-2"):
+                ui.button("Add Row", icon="add",
+                          on_click=self._add_section_row).props("flat dense")
+                ui.button("Delete Last", icon="remove",
+                          on_click=self._del_section_row).props("flat dense")
 
-                # Bearings table
-                ui.separator()
-                ui.label("Bearings").classes("text-md font-bold")
+            ui.separator()
+            ui.label("Bearings").classes("text-md font-bold")
 
-                self.bearings_grid = ui.aggrid({
-                    "columnDefs": [
-                        {"headerName": "#", "field": "#", "width": 60,
-                         "editable": False},
-                        {"headerName": "Station", "field": "Station", "width": 100,
-                         "editable": True, "type": "numericColumn"},
-                        {"headerName": "KR (lb/in)", "field": "KR (lb/in)", "width": 140,
-                         "editable": True, "type": "numericColumn",
-                         "valueFormatter": "x.value?.toExponential(2)"},
-                    ],
-                    "rowData": [],
-                    "defaultColDef": {"sortable": True, "resizable": True},
-                    "domLayout": "autoHeight",
-                }).classes("w-full")
+            self.bearings_grid = ui.aggrid({
+                "columnDefs": [
+                    {"headerName": "#", "field": "#", "width": 60,
+                     "editable": False},
+                    {"headerName": "Station", "field": "Station", "width": 100,
+                     "editable": True, "type": "numericColumn"},
+                    {"headerName": "KR (lb/in)", "field": "KR (lb/in)", "width": 140,
+                     "editable": True, "type": "numericColumn",
+                     "valueFormatter": "x.value?.toExponential(2)"},
+                ],
+                "rowData": [],
+                "defaultColDef": {"sortable": True, "resizable": True},
+                "domLayout": "autoHeight",
+            }).classes("w-full")
 
-                with ui.row().classes("gap-2"):
-                    ui.button("Add Bearing", icon="add",
-                              on_click=self._add_bearing_row).props("flat dense")
-                    ui.button("Delete Last", icon="remove",
-                              on_click=self._del_bearing_row).props("flat dense")
+            with ui.row().classes("gap-2"):
+                ui.button("Add Bearing", icon="add",
+                          on_click=self._add_bearing_row).props("flat dense")
+                ui.button("Delete Last", icon="remove",
+                          on_click=self._del_bearing_row).props("flat dense")
 
-                # Calculate button
-                ui.separator()
-                ui.button(
-                    "Start Calculation",
-                    icon="play_arrow",
-                    on_click=self._run_calculation,
-                ).props("color=primary unelevated").classes("w-full text-lg")
+            ui.separator()
+            ui.button(
+                "Start Calculation",
+                icon="play_arrow",
+                on_click=self._run_calculation,
+            ).props("color=primary unelevated").classes("w-full text-lg")
 
     def _build_results_panel(self):
-        """Build the right results panel."""
-        self.results_panel = ui.column().classes("w-full h-full p-4 gap-4")
+        """Build the main results area."""
+        self.results_panel = ui.column().classes("w-full p-4 gap-4")
         with self.results_panel:
             ui.label("Calculation Results").classes("text-lg font-bold")
 
@@ -213,8 +226,10 @@ class RotorDynApp:
                 ui.label("Upload a .rin file or enter data manually,").classes("text-md")
                 ui.label("then click 'Start Calculation'").classes("text-md")
 
-            # Mode cards container (hidden initially)
-            self.mode_cards_container = ui.row().classes("w-full gap-2 flex-wrap")
+            # Mode cards container — horizontal scroll, no wrap
+            self.mode_cards_container = ui.row().classes("w-full gap-2").style(
+                "overflow-x:auto; flex-wrap:nowrap; padding-bottom:4px"
+            )
             self.mode_cards_container.set_visibility(False)
 
             # Plot mode selector + plot
@@ -277,12 +292,12 @@ class RotorDynApp:
     async def _handle_upload(self, e):
         """Handle .rin file upload."""
         try:
-            content = e.content.read()
-            # Write to temp file for parser
+            # NiceGUI 3.x: e.file is a FileUpload with async read()/text()
+            text = await e.file.text()
             with tempfile.NamedTemporaryFile(
                 mode="w", suffix=".rin", delete=False
             ) as tmp:
-                tmp.write(content.decode("utf-8", errors="replace"))
+                tmp.write(text)
                 tmp_path = tmp.name
 
             self.rotor = parse_rin(tmp_path)
@@ -403,24 +418,21 @@ class RotorDynApp:
         self.plot_section.set_visibility(True)
         self.detail_section.set_visibility(True)
 
-        # Mode cards
+        # Mode cards — compact horizontal strip
         self.mode_cards_container.clear()
         with self.mode_cards_container:
             for i, m in enumerate(self.modes):
-                with ui.card().classes("mode-card p-3").on(
-                    "click", lambda _, idx=i: self._select_mode(idx)
-                ):
+                with ui.card().classes("mode-card p-2").style(
+                    "min-width:130px; flex-shrink:0"
+                ).on("click", lambda _, idx=i: self._select_mode(idx)):
                     ui.label(
                         f"Mode {m.mode_number}"
-                    ).classes("text-sm font-bold text-primary")
+                    ).classes("text-xs font-bold text-primary")
                     ui.label(
-                        f"{m.rpm:.1f} RPM ({m.hz:.2f} Hz)"
+                        f"{m.rpm:.0f} RPM"
                     ).classes("text-xs")
                     ui.label(
-                        f"Gen: {m.generalized_mass:.2E}"
-                    ).classes("text-xs opacity-70")
-                    ui.label(
-                        f"Eff: {m.effective_mass:.2E}"
+                        f"{m.hz:.2f} Hz"
                     ).classes("text-xs opacity-70")
 
         # Plot mode selector
@@ -443,6 +455,11 @@ class RotorDynApp:
         # Render plot and table for first mode
         self._update_plot()
         self._update_results_table(0)
+
+        # Scroll right panel to top
+        ui.run_javascript(
+            f'document.getElementById("c{self.right_panel.id}").scrollTop = 0;'
+        )
 
     def _select_mode(self, idx: int):
         """Handle mode card click."""
