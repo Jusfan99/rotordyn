@@ -3,6 +3,9 @@ __pycache__/
 *.pyo
 *.egg-info/
 dist/
-build/
+.venv/
 .pytest_cache/
 tests/output_test.rout
+# PyInstaller build artifacts (keep .spec files)
+build/*
+!build/*.spec

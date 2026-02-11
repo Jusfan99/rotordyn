@@ -1,0 +1,42 @@
+name: Build Windows EXE
+
+on:
+  workflow_dispatch:  # Manual trigger from GitHub UI
+  push:
+    tags:
+      - 'v*'  # Auto-build on version tags like v0.1.0
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -e .
+          pip install pyinstaller pywebview
+
+      - name: Build EXE
+        run: |
+          pyinstaller main.py `
+            --name RotorDyn `
+            --onedir `
+            --windowed `
+            --noconfirm `
+            --clean `
+            --collect-all nicegui `
+            --hidden-import plotly `
+            --hidden-import engineio.async_drivers.aiohttp
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: RotorDyn-Windows
+          path: dist/RotorDyn/
+          retention-days: 30
