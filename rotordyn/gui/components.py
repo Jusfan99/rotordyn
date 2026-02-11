@@ -11,13 +11,7 @@ def build_mode_shape_figure(
     selected_indices: list[int],
     rotor: Rotor,
 ) -> go.Figure:
-    """Build a Plotly figure showing mode shapes.
-
-    Args:
-        modes: All computed mode results.
-        selected_indices: 0-based indices of modes to display.
-        rotor: The rotor model (for bearing positions).
-    """
+    """Build a Plotly figure showing mode shapes."""
     fig = go.Figure()
 
     colors = [
@@ -30,13 +24,18 @@ def build_mode_shape_figure(
         if idx >= len(modes):
             continue
         mode = modes[idx]
-        # Filter to station-type points for smooth curve (skip bearing_pre/bearing_jnl duplicates)
         lengths = []
         disps = []
+        slopes = []
+        moments = []
+        shears = []
         for st in mode.stations:
             if st["type"] in ("station", "endpoint"):
                 lengths.append(st["length"])
                 disps.append(st["displacement"])
+                slopes.append(st["slope"])
+                moments.append(st["moment"])
+                shears.append(st["shear"])
 
         color = colors[idx % len(colors)]
         fig.add_trace(go.Scatter(
@@ -46,10 +45,14 @@ def build_mode_shape_figure(
             name=f"Mode {mode.mode_number}: {mode.rpm:.1f} RPM",
             line=dict(color=color, width=2),
             marker=dict(size=4),
+            customdata=list(zip(slopes, moments, shears)),
             hovertemplate=(
-                "Length: %{x:.3f} in<br>"
-                "Disp: %{y:.6f}<br>"
-                "<extra>Mode %{fullData.name}</extra>"
+                "<b>Length</b>: %{x:.3f} in<br>"
+                "<b>Displacement</b>: %{y:.6f}<br>"
+                "<b>Slope</b>: %{customdata[0]:.4E}<br>"
+                "<b>Moment</b>: %{customdata[1]:.4E}<br>"
+                "<b>Shear</b>: %{customdata[2]:.4E}<br>"
+                "<extra>%{fullData.name}</extra>"
             ),
         ))
 
@@ -76,6 +79,7 @@ def build_mode_shape_figure(
         title="Mode Shape (Normalized Displacement)",
         xaxis_title="Rotor Length (in)",
         yaxis_title="Normalized Displacement",
+        xaxis=dict(rangeslider=dict(visible=True, thickness=0.05)),
         template="plotly_dark",
         paper_bgcolor="rgba(30,30,30,1)",
         plot_bgcolor="rgba(40,40,40,1)",
@@ -84,7 +88,7 @@ def build_mode_shape_figure(
             xanchor="right", x=0.99,
         ),
         margin=dict(l=60, r=20, t=50, b=50),
-        height=400,
+        height=450,
     )
 
     return fig
@@ -122,12 +126,12 @@ def results_grid_data(mode: ModeResult) -> list[dict]:
     for st in mode.stations:
         rows.append({
             "Section": st["section"],
-            "Length": round(st["length"], 3),
-            "Slope": f"{st['slope']:.6E}",
+            "Length": f"{st['length']:.3f}",
+            "Slope": f"{st['slope']:.4E}",
             "Displacement": f"{st['displacement']:.6f}",
-            "Moment": f"{st['moment']:.6E}",
-            "Shear": f"{st['shear']:.6E}",
+            "Moment": f"{st['moment']:.4E}",
+            "Shear": f"{st['shear']:.4E}",
             "Type": st["type"],
-            "Reaction": f"{st['reaction']:.6E}" if st["reaction"] != 0 else "",
+            "Reaction": f"{st['reaction']:.4E}" if st["reaction"] != 0 else "",
         })
     return rows

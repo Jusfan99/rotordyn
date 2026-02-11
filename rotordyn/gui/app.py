@@ -1,5 +1,6 @@
 """NiceGUI main application for RotorDyn Calculator."""
 
+import asyncio
 import tempfile
 import time
 from pathlib import Path
@@ -37,6 +38,13 @@ class RotorDynApp:
         self.status_label = None
         self.mode_select = None
         self.plot_mode_select = None
+        self.right_panel = None
+        # #2: mode card refs for highlight
+        self.mode_card_refs: list = []
+        # #11: summary container
+        self.summary_container = None
+        # #4: loading spinner ref
+        self.loading_container = None
         # Input fields
         self.rpm_min_input = None
         self.rpm_max_input = None
@@ -67,11 +75,12 @@ class RotorDynApp:
             }
             .mode-card { transition: all 0.2s; cursor: pointer; }
             .mode-card:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
-            .summary-value { font-size: 1.1em; font-weight: 500; }
+            .mode-card-selected { border: 2px solid #2196F3 !important; background: rgba(33,150,243,0.12) !important; }
             .empty-state { opacity: 0.6; }
+            .q-uploader__subtitle { display: none; }
         </style>""")
 
-        # ── Top bar (plain row, NOT ui.header) ──
+        # ── Top bar ──
         with ui.row().classes(
             "w-full items-center justify-between px-4 text-white"
         ).style("background:#1a1a2e; min-height:48px; flex-shrink:0"):
@@ -100,7 +109,7 @@ class RotorDynApp:
             with self.right_panel:
                 self._build_results_panel()
 
-        # ── Bottom status bar (plain row, NOT ui.footer) ──
+        # ── Bottom status bar ──
         with ui.row().classes("w-full items-center px-4").style(
             "min-height:28px; flex-shrink:0; "
             "border-top:1px solid rgba(128,128,128,0.3)"
@@ -110,7 +119,7 @@ class RotorDynApp:
             ).classes("text-sm")
 
     def _build_input_panel(self):
-        """Build the left input panel (inside drawer)."""
+        """Build the left input panel."""
         with ui.column().classes("w-full gap-4"):
             ui.label("Input Data").classes("text-lg font-bold")
 
@@ -121,6 +130,12 @@ class RotorDynApp:
                     on_upload=self._handle_upload,
                     auto_upload=True,
                 ).props('flat bordered color=primary').classes("w-full")
+
+            # #9: Load Example button
+            ui.button(
+                "Load Example Data", icon="science",
+                on_click=self._load_example,
+            ).props("flat dense color=primary").classes("w-full")
 
             self.title_input = ui.input(
                 label="Title", value=""
@@ -151,6 +166,7 @@ class RotorDynApp:
                 format="%.2E",
             ).classes("w-full")
 
+            # #1: Sections grid — fixed height, internal scroll
             ui.separator()
             ui.label("Shaft Sections").classes("text-md font-bold")
 
@@ -158,7 +174,7 @@ class RotorDynApp:
                 "columnDefs": [
                     {"headerName": "#", "field": "#", "width": 60,
                      "editable": False},
-                    {"headerName": "I (in⁴)", "field": "I (in⁴)", "width": 110,
+                    {"headerName": "I (in\u2074)", "field": "I (in\u2074)", "width": 110,
                      "editable": True, "type": "numericColumn",
                      "valueFormatter": "x.value?.toExponential(2)"},
                     {"headerName": "W (lb)", "field": "W (lb)", "width": 90,
@@ -173,8 +189,7 @@ class RotorDynApp:
                 ],
                 "rowData": [],
                 "defaultColDef": {"sortable": True, "resizable": True},
-                "domLayout": "autoHeight",
-            }).classes("w-full")
+            }).classes("w-full").style("height:300px")
 
             with ui.row().classes("gap-2"):
                 ui.button("Add Row", icon="add",
@@ -182,6 +197,7 @@ class RotorDynApp:
                 ui.button("Delete Last", icon="remove",
                           on_click=self._del_section_row).props("flat dense")
 
+            # #1: Bearings grid — fixed height
             ui.separator()
             ui.label("Bearings").classes("text-md font-bold")
 
@@ -197,8 +213,7 @@ class RotorDynApp:
                 ],
                 "rowData": [],
                 "defaultColDef": {"sortable": True, "resizable": True},
-                "domLayout": "autoHeight",
-            }).classes("w-full")
+            }).classes("w-full").style("height:200px")
 
             with ui.row().classes("gap-2"):
                 ui.button("Add Bearing", icon="add",
@@ -226,6 +241,19 @@ class RotorDynApp:
                 ui.label("Upload a .rin file or enter data manually,").classes("text-md")
                 ui.label("then click 'Start Calculation'").classes("text-md")
 
+            # #4: Loading spinner container
+            self.loading_container = ui.column().classes("w-full items-center py-8")
+            self.loading_container.set_visibility(False)
+            with self.loading_container:
+                ui.spinner("dots", size="xl", color="primary")
+                ui.label("Computing critical speeds...").classes("text-md mt-4")
+
+            # #11: Results summary cards
+            self.summary_container = ui.row().classes("w-full gap-3").style(
+                "flex-wrap:nowrap; overflow-x:auto"
+            )
+            self.summary_container.set_visibility(False)
+
             # Mode cards container — horizontal scroll, no wrap
             self.mode_cards_container = ui.row().classes("w-full gap-2").style(
                 "overflow-x:auto; flex-wrap:nowrap; padding-bottom:4px"
@@ -246,7 +274,7 @@ class RotorDynApp:
 
                 self.plot_container = ui.column().classes("w-full")
 
-            # Results detail section
+            # #3: Results detail section — wider columns, fixed height grid
             self.detail_section = ui.column().classes("w-full gap-2")
             self.detail_section.set_visibility(False)
             with self.detail_section:
@@ -262,21 +290,20 @@ class RotorDynApp:
 
                 self.results_grid = ui.aggrid({
                     "columnDefs": [
-                        {"headerName": "Section", "field": "Section", "width": 80},
-                        {"headerName": "Length", "field": "Length", "width": 100},
+                        {"headerName": "Sec", "field": "Section", "width": 65},
+                        {"headerName": "Length", "field": "Length", "width": 85},
                         {"headerName": "Slope", "field": "Slope", "width": 130},
-                        {"headerName": "Displacement", "field": "Displacement", "width": 130},
+                        {"headerName": "Displ.", "field": "Displacement", "width": 110},
                         {"headerName": "Moment", "field": "Moment", "width": 130},
                         {"headerName": "Shear", "field": "Shear", "width": 130},
-                        {"headerName": "Type", "field": "Type", "width": 100},
-                        {"headerName": "Reaction", "field": "Reaction", "width": 130},
+                        {"headerName": "Type", "field": "Type", "width": 70},
+                        {"headerName": "Reaction", "field": "Reaction", "width": 120},
                     ],
                     "rowData": [],
                     "defaultColDef": {
                         "sortable": True, "resizable": True, "filter": True,
                     },
-                    "domLayout": "autoHeight",
-                }).classes("w-full")
+                }).classes("w-full").style("height:400px")
 
                 # Export buttons
                 with ui.row().classes("gap-2"):
@@ -292,7 +319,6 @@ class RotorDynApp:
     async def _handle_upload(self, e):
         """Handle .rin file upload."""
         try:
-            # NiceGUI 3.x: e.file is a FileUpload with async read()/text()
             text = await e.file.text()
             with tempfile.NamedTemporaryFile(
                 mode="w", suffix=".rin", delete=False
@@ -303,7 +329,8 @@ class RotorDynApp:
             self.rotor = parse_rin(tmp_path)
             Path(tmp_path).unlink(missing_ok=True)
 
-            # Populate UI from parsed rotor
+            # #7: Clear old results before populating new data
+            self._clear_results()
             self._populate_from_rotor()
             self.status_label.text = (
                 f"Loaded: {len(self.rotor.sections)} sections, "
@@ -315,6 +342,22 @@ class RotorDynApp:
         except Exception as ex:
             ui.notify(f"Error parsing file: {ex}", type="negative")
             self.status_label.text = f"Error: {ex}"
+
+    def _clear_results(self):
+        """Reset results panel to empty state."""
+        self.modes = []
+        self.mode_card_refs = []
+        self.empty_state.set_visibility(True)
+        self.loading_container.set_visibility(False)
+        self.summary_container.set_visibility(False)
+        self.summary_container.clear()
+        self.mode_cards_container.set_visibility(False)
+        self.mode_cards_container.clear()
+        self.plot_section.set_visibility(False)
+        self.plot_container.clear()
+        self.detail_section.set_visibility(False)
+        self.results_grid.options["rowData"] = []
+        self.results_grid.update()
 
     def _populate_from_rotor(self):
         """Fill UI fields from self.rotor."""
@@ -332,16 +375,17 @@ class RotorDynApp:
         self.bearings_grid.options["rowData"] = bearings_grid_data(r)
         self.bearings_grid.update()
 
-    def _build_rotor_from_ui(self) -> Rotor:
+    # #8: async to get client-edited grid data
+    async def _build_rotor_from_ui(self) -> Rotor:
         """Build a Rotor object from current UI state."""
-        sec_rows = self.sections_grid.options["rowData"]
-        brg_rows = self.bearings_grid.options["rowData"]
+        sec_rows = await self.sections_grid.get_client_data()
+        brg_rows = await self.bearings_grid.get_client_data()
 
         sections = []
         for row in sec_rows:
             sections.append(ShaftSection(
                 index=int(row["#"]),
-                I=float(row["I (in⁴)"]),
+                I=float(row["I (in\u2074)"]),
                 W=float(row["W (lb)"]),
                 L=float(row["L (in)"]),
                 D=float(row["D (in)"]),
@@ -379,23 +423,51 @@ class RotorDynApp:
 
     async def _run_calculation(self):
         """Execute the solver and display results."""
-        # Validate
-        sec_rows = self.sections_grid.options["rowData"]
+        # #8: get latest client data
+        sec_rows = await self.sections_grid.get_client_data()
+
+        # #6: Input validation
+        errors = []
         if not sec_rows:
-            ui.notify("No shaft sections defined!", type="warning")
+            errors.append("No shaft sections defined!")
+        rpm_min = float(self.rpm_min_input.value or 0)
+        rpm_max = float(self.rpm_max_input.value or 0)
+        rpm_incr = float(self.rpm_incr_input.value or 0)
+        n_crits = int(self.n_crits_input.value or 0)
+        youngs = float(self.youngs_input.value or 0)
+        if rpm_min >= rpm_max:
+            errors.append("RPM Min must be less than RPM Max")
+        if rpm_incr <= 0:
+            errors.append("RPM Increment must be > 0")
+        if n_crits <= 0:
+            errors.append("Critical Speeds count must be > 0")
+        if youngs <= 0:
+            errors.append("Young's Modulus must be > 0")
+        if errors:
+            for err in errors:
+                ui.notify(err, type="warning")
             return
 
         try:
+            # #4: Show loading spinner
+            self.empty_state.set_visibility(False)
+            self.loading_container.set_visibility(True)
             self.status_label.text = "Computing critical speeds..."
-            self.rotor = self._build_rotor_from_ui()
+            await asyncio.sleep(0.05)  # yield to let UI update
+
+            self.rotor = await self._build_rotor_from_ui()
 
             t0 = time.time()
             self.modes = solve(self.rotor)
             elapsed = time.time() - t0
 
+            # #4: Hide loading spinner
+            self.loading_container.set_visibility(False)
+
             if not self.modes:
                 ui.notify("No critical speeds found in RPM range.", type="warning")
                 self.status_label.text = "No critical speeds found."
+                self.empty_state.set_visibility(True)
                 return
 
             self._display_results()
@@ -408,32 +480,65 @@ class RotorDynApp:
                 type="positive",
             )
         except Exception as ex:
+            self.loading_container.set_visibility(False)
             ui.notify(f"Calculation error: {ex}", type="negative")
             self.status_label.text = f"Error: {ex}"
 
     def _display_results(self):
         """Show results after calculation."""
         self.empty_state.set_visibility(False)
+        self.loading_container.set_visibility(False)
+        self.summary_container.set_visibility(True)
         self.mode_cards_container.set_visibility(True)
         self.plot_section.set_visibility(True)
         self.detail_section.set_visibility(True)
 
-        # Mode cards — compact horizontal strip
+        # #11: Summary cards
+        self.summary_container.clear()
+        with self.summary_container:
+            with ui.card().classes("p-4").style(
+                "min-width:150px; flex-shrink:0; "
+                "background:linear-gradient(135deg,#1a237e,#283593)"
+            ):
+                ui.label(f"{len(self.modes)}").classes("text-3xl font-bold text-white")
+                ui.label("Critical Speeds").classes("text-xs text-white opacity-70")
+            with ui.card().classes("p-4").style(
+                "min-width:180px; flex-shrink:0; "
+                "background:linear-gradient(135deg,#004d40,#00695c)"
+            ):
+                ui.label(f"{self.modes[0].rpm:.1f} RPM").classes(
+                    "text-2xl font-bold text-white"
+                )
+                ui.label(
+                    f"1st Critical ({self.modes[0].hz:.2f} Hz)"
+                ).classes("text-xs text-white opacity-70")
+            if len(self.modes) > 1:
+                with ui.card().classes("p-4").style(
+                    "min-width:180px; flex-shrink:0; "
+                    "background:linear-gradient(135deg,#b71c1c,#c62828)"
+                ):
+                    ui.label(f"{self.modes[-1].rpm:.1f} RPM").classes(
+                        "text-2xl font-bold text-white"
+                    )
+                    ui.label(
+                        f"Highest ({self.modes[-1].hz:.2f} Hz)"
+                    ).classes("text-xs text-white opacity-70")
+
+        # #2: Mode cards with selection highlight
         self.mode_cards_container.clear()
+        self.mode_card_refs = []
         with self.mode_cards_container:
             for i, m in enumerate(self.modes):
-                with ui.card().classes("mode-card p-2").style(
+                card = ui.card().classes("mode-card p-2").style(
                     "min-width:130px; flex-shrink:0"
-                ).on("click", lambda _, idx=i: self._select_mode(idx)):
+                ).on("click", lambda _, idx=i: self._select_mode(idx))
+                with card:
                     ui.label(
                         f"Mode {m.mode_number}"
                     ).classes("text-xs font-bold text-primary")
-                    ui.label(
-                        f"{m.rpm:.0f} RPM"
-                    ).classes("text-xs")
-                    ui.label(
-                        f"{m.hz:.2f} Hz"
-                    ).classes("text-xs opacity-70")
+                    ui.label(f"{m.rpm:.0f} RPM").classes("text-xs")
+                    ui.label(f"{m.hz:.2f} Hz").classes("text-xs opacity-70")
+                self.mode_card_refs.append(card)
 
         # Plot mode selector
         mode_options = {
@@ -456,6 +561,9 @@ class RotorDynApp:
         self._update_plot()
         self._update_results_table(0)
 
+        # #2: Highlight first mode card
+        self._highlight_card(0)
+
         # Scroll right panel to top
         ui.run_javascript(
             f'document.getElementById("c{self.right_panel.id}").scrollTop = 0;'
@@ -471,11 +579,22 @@ class RotorDynApp:
             self.plot_mode_select.value = self.selected_plot_indices
         self._update_plot()
         self._update_results_table(idx)
+        # #2: Update highlight
+        self._highlight_card(idx)
+
+    def _highlight_card(self, selected_idx: int):
+        """Toggle mode-card-selected class on mode cards."""
+        for i, card in enumerate(self.mode_card_refs):
+            if i == selected_idx:
+                card.classes(add="mode-card-selected")
+            else:
+                card.classes(remove="mode-card-selected")
 
     def _on_mode_select_change(self, e):
         """Handle detail mode dropdown change."""
         if e.value is not None:
             self._update_results_table(e.value)
+            self._highlight_card(e.value)
 
     def _on_plot_modes_change(self, e):
         """Handle plot mode multi-select change."""
@@ -507,7 +626,7 @@ class RotorDynApp:
     def _add_section_row(self):
         rows = self.sections_grid.options["rowData"]
         new_idx = (rows[-1]["#"] + 1) if rows else 1
-        rows.append({"#": new_idx, "I (in⁴)": 0, "W (lb)": 0, "L (in)": 0, "D (in)": 0})
+        rows.append({"#": new_idx, "I (in\u2074)": 0, "W (lb)": 0, "L (in)": 0, "D (in)": 0})
         self.sections_grid.update()
 
     def _del_section_row(self):
@@ -527,6 +646,26 @@ class RotorDynApp:
         if rows:
             rows.pop()
             self.bearings_grid.update()
+
+    # ── #9: Load example data ─────────────────────────────────────
+
+    async def _load_example(self):
+        """Load example .rin data from test fixtures."""
+        example_path = Path(__file__).parent.parent.parent / "tests" / "fixtures" / "rin"
+        if not example_path.exists():
+            ui.notify("Example file not found", type="warning")
+            return
+        try:
+            self.rotor = parse_rin(str(example_path))
+            self._clear_results()
+            self._populate_from_rotor()
+            self.status_label.text = (
+                f"Example loaded: {len(self.rotor.sections)} sections, "
+                f"{len(self.rotor.bearings)} bearings"
+            )
+            ui.notify("Example data loaded!", type="positive")
+        except Exception as ex:
+            ui.notify(f"Error loading example: {ex}", type="negative")
 
     # ── Export handlers ──────────────────────────────────────────
 
