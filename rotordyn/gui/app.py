@@ -50,7 +50,7 @@ class RotorDynApp:
         # Dark mode
         self.dark = ui.dark_mode(self.dark_mode)
 
-        # Custom CSS
+        # Custom CSS + prevent browser default drag-drop behavior
         ui.add_head_html("""
         <style>
             .q-header { background: #1a1a2e !important; }
@@ -60,6 +60,11 @@ class RotorDynApp:
             .summary-value { font-size: 1.1em; font-weight: 500; }
             .empty-state { opacity: 0.6; }
         </style>
+        <script>
+            // Prevent browser from opening dropped files
+            document.addEventListener('dragover', function(e) { e.preventDefault(); });
+            document.addEventListener('drop', function(e) { e.preventDefault(); });
+        </script>
         """)
 
         # Header
@@ -94,10 +99,10 @@ class RotorDynApp:
                 ui.label("Input Data").classes("text-lg font-bold")
 
                 ui.upload(
-                    label="Drag & drop .rin file here",
+                    label="Drag & drop .rin file here (or click to browse)",
                     on_upload=self._handle_upload,
                     auto_upload=True,
-                ).props('accept=".rin,.RIN,.txt" flat bordered').classes("w-full")
+                ).props('flat bordered').classes("w-full")
 
                 # Title
                 self.title_input = ui.input(
