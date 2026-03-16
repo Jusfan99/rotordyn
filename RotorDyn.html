@@ -43,17 +43,14 @@ table.data td { padding: 4px 8px; border-bottom: 1px solid var(--border); }
 table.data td input { background: transparent; border: none; color: var(--text); width: 100%; padding: 2px; font-size: 12px; font-family: 'Consolas', monospace; }
 table.data td input:focus { background: var(--bg4); outline: 1px solid var(--accent); }
 .table-wrap { max-height: 250px; overflow-y: auto; border: 1px solid var(--border); border-radius: 4px; }
-.summary-row { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 4px; flex-shrink: 0; }
-.summary-card { background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; padding: 12px 16px; min-width: 160px; flex-shrink: 0; }
-.summary-card .val { font-size: 22px; font-weight: 700; color: var(--accent); }
-.summary-card .lbl { font-size: 11px; color: var(--text2); margin-top: 2px; }
-.mode-row { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; flex-shrink: 0; }
-.mode-chip { background: var(--bg2); border: 1px solid var(--border); border-radius: 6px; padding: 8px 14px; cursor: pointer; min-width: 120px; flex-shrink: 0; transition: all 0.2s; }
-.mode-chip:hover { border-color: var(--accent); }
-.mode-chip.active { border-color: var(--accent); background: rgba(33,150,243,0.15); }
-.mode-chip .num { font-size: 12px; color: var(--text2); }
-.mode-chip .rpm { font-size: 15px; font-weight: 600; }
-.mode-chip .hz { font-size: 11px; color: var(--text2); }
+.modes-table-wrap { max-height: 320px; overflow-y: auto; border: 1px solid var(--border); border-radius: 6px; flex-shrink: 0; }
+table.modes-tbl { width: 100%; border-collapse: collapse; font-size: 12px; }
+table.modes-tbl th { background: var(--bg3); padding: 7px 10px; text-align: right; font-weight: 500; position: sticky; top: 0; z-index: 1; }
+table.modes-tbl th:first-child { text-align: center; }
+table.modes-tbl td { padding: 5px 10px; border-bottom: 1px solid var(--border); text-align: right; font-family: 'Consolas', monospace; font-size: 12px; cursor: pointer; }
+table.modes-tbl td:first-child { text-align: center; font-family: inherit; }
+table.modes-tbl tr:hover td { background: rgba(33,150,243,0.08); }
+table.modes-tbl tr.active td { background: rgba(33,150,243,0.18); border-color: var(--accent); }
 #calcBtn { width: 100%; padding: 14px; font-size: 16px; font-weight: 600; letter-spacing: 0.5px; }
 .status { background: var(--bg2); padding: 6px 20px; font-size: 12px; color: var(--text2); border-top: 1px solid var(--border); flex-shrink: 0; }
 .hidden { display: none !important; }
@@ -109,7 +106,7 @@ table.data td input:focus { background: var(--bg4); outline: 1px solid var(--acc
         <div><label># Critical Speeds</label><input type="number" id="optNCrits" value="15"></div>
       </div>
       <div class="row" style="margin-top:6px">
-        <div><label>Young's Modulus (psi)</label><input type="number" id="optE" value="29000000"></div>
+        <div><label>Young's Modulus (GPa)</label><input type="number" id="optE" value="200" step="0.1"></div>
       </div>
     </div>
 
@@ -117,7 +114,7 @@ table.data td input:focus { background: var(--bg4); outline: 1px solid var(--acc
       <h3>Shaft Sections</h3>
       <div class="table-wrap" id="secTableWrap">
         <table class="data" id="secTable">
-          <thead><tr><th>#</th><th>I (in&#8308;)</th><th>W (lb)</th><th>L (in)</th><th>D (in)</th></tr></thead>
+          <thead><tr><th>#</th><th>I (cm&#8308;)</th><th>W (kg)</th><th>L (mm)</th><th>D (mm)</th></tr></thead>
           <tbody></tbody>
         </table>
       </div>
@@ -131,7 +128,7 @@ table.data td input:focus { background: var(--bg4); outline: 1px solid var(--acc
       <h3>Bearings</h3>
       <div class="table-wrap" style="max-height:160px" id="brgTableWrap">
         <table class="data" id="brgTable">
-          <thead><tr><th>#</th><th>Station</th><th>KR (lb/in)</th></tr></thead>
+          <thead><tr><th>#</th><th>Station</th><th>KR (N/mm)</th></tr></thead>
           <tbody></tbody>
         </table>
       </div>
@@ -154,8 +151,15 @@ table.data td input:focus { background: var(--bg4); outline: 1px solid var(--acc
     </div>
 
     <div id="resultsArea" class="hidden">
-      <div class="summary-row" id="summaryRow"></div>
-      <div class="mode-row" id="modeRow"></div>
+      <div class="card">
+        <h3>Critical Speeds Overview</h3>
+        <div class="modes-table-wrap">
+          <table class="modes-tbl" id="modesTable">
+            <thead><tr><th>Mode</th><th>RPM</th><th>Hz</th><th>Gen. Mass</th><th>Eff. Mass</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
 
       <div class="card">
         <h3>Mode Shape</h3>
@@ -170,7 +174,7 @@ table.data td input:focus { background: var(--bg4); outline: 1px solid var(--acc
         </div>
         <div class="table-wrap" style="max-height:400px">
           <table class="data" id="detailTable">
-            <thead><tr><th>Sec</th><th>Length</th><th>Slope</th><th>Disp</th><th>Moment</th><th>Shear</th><th>Type</th><th>Reaction</th></tr></thead>
+            <thead><tr><th>Sec</th><th>Length (mm)</th><th>Slope</th><th>Disp</th><th>Moment</th><th>Shear</th><th>Type</th><th>Reaction</th></tr></thead>
             <tbody></tbody>
           </table>
         </div>
@@ -188,8 +192,15 @@ table.data td input:focus { background: var(--bg4); outline: 1px solid var(--acc
 // ============================================================
 // Constants
 // ============================================================
-const E_DEFAULT = 29.0e6;
-const G_ACCEL = 386.0886;
+const E_DEFAULT = 29.0e6;  // psi (internal)
+const G_ACCEL = 386.0886;  // in/s² (internal)
+
+// Unit conversion: internal (imperial) ↔ display (metric)
+const IN4_TO_CM4 = 41.6231;   // in⁴ → cm⁴
+const LB_TO_KG = 0.453592;    // lb → kg
+const IN_TO_MM = 25.4;         // in → mm
+const LB_IN_TO_N_MM = 0.17513; // lb/in → N/mm
+const PSI_TO_GPA = 6.89476e-6; // psi → GPa
 
 // ============================================================
 // Matrix helpers (4x4 only)
@@ -475,7 +486,7 @@ function handleFile(file) {
     try {
       currentRotor = parseRin(e.target.result);
       populateUI();
-      setStatus(`Loaded: ${currentRotor.sections.length} sections, ${currentRotor.bearings.length} bearings, Total: ${totalWeight().toFixed(1)} lb, ${totalLength().toFixed(3)} in`);
+      setStatus(`Loaded: ${currentRotor.sections.length} sections, ${currentRotor.bearings.length} bearings, Total: ${(totalWeight()*LB_TO_KG).toFixed(1)} kg, ${(totalLength()*IN_TO_MM).toFixed(1)} mm`);
     } catch(ex) {
       setStatus(`Error: ${ex.message}`);
       alert('Error parsing file: ' + ex.message);
@@ -498,7 +509,7 @@ function populateUI() {
   document.getElementById('optRpmMax').value = currentRotor.options.rpmMax;
   document.getElementById('optRpmIncr').value = currentRotor.options.rpmIncr;
   document.getElementById('optNCrits').value = currentRotor.options.nCrits;
-  document.getElementById('optE').value = currentRotor.options.youngsMod;
+  document.getElementById('optE').value = (currentRotor.options.youngsMod * PSI_TO_GPA).toFixed(2);
   renderSecTable();
   renderBrgTable();
 }
@@ -509,12 +520,18 @@ function renderSecTable() {
   if (!currentRotor) return;
   for (const s of currentRotor.sections) {
     const tr = document.createElement('tr');
-    tr.innerHTML = `<td>${s.index}</td><td><input value="${s.I}" data-i="${s.index-1}" data-f="I"></td><td><input value="${s.W}" data-i="${s.index-1}" data-f="W"></td><td><input value="${s.L}" data-i="${s.index-1}" data-f="L"></td><td><input value="${s.D}" data-i="${s.index-1}" data-f="D"></td>`;
+    // Display in metric: I→cm⁴, W→kg, L→mm, D→mm
+    tr.innerHTML = `<td>${s.index}</td><td><input value="${(s.I * IN4_TO_CM4).toPrecision(6)}" data-i="${s.index-1}" data-f="I"></td><td><input value="${(s.W * LB_TO_KG).toPrecision(6)}" data-i="${s.index-1}" data-f="W"></td><td><input value="${(s.L * IN_TO_MM).toPrecision(6)}" data-i="${s.index-1}" data-f="L"></td><td><input value="${(s.D * IN_TO_MM).toPrecision(6)}" data-i="${s.index-1}" data-f="D"></td>`;
     tb.appendChild(tr);
   }
   tb.querySelectorAll('input').forEach(inp => inp.onchange = function() {
     const i = parseInt(this.dataset.i), f = this.dataset.f;
-    currentRotor.sections[i][f] = parseFloat(this.value) || 0;
+    const v = parseFloat(this.value) || 0;
+    // Convert metric input back to internal imperial
+    if (f === 'I') currentRotor.sections[i].I = v / IN4_TO_CM4;
+    else if (f === 'W') currentRotor.sections[i].W = v / LB_TO_KG;
+    else if (f === 'L') currentRotor.sections[i].L = v / IN_TO_MM;
+    else if (f === 'D') currentRotor.sections[i].D = v / IN_TO_MM;
   });
 }
 
@@ -524,13 +541,15 @@ function renderBrgTable() {
   if (!currentRotor) return;
   for (const b of currentRotor.bearings) {
     const tr = document.createElement('tr');
-    tr.innerHTML = `<td>${b.index}</td><td><input value="${b.station}" data-i="${b.index-1}" data-f="station"></td><td><input value="${b.KR}" data-i="${b.index-1}" data-f="KR"></td>`;
+    // Display KR in N/mm
+    tr.innerHTML = `<td>${b.index}</td><td><input value="${b.station}" data-i="${b.index-1}" data-f="station"></td><td><input value="${(b.KR * LB_IN_TO_N_MM).toPrecision(6)}" data-i="${b.index-1}" data-f="KR"></td>`;
     tb.appendChild(tr);
   }
   tb.querySelectorAll('input').forEach(inp => inp.onchange = function() {
     const i = parseInt(this.dataset.i), f = this.dataset.f;
     const v = parseFloat(this.value) || 0;
     if (f === 'station') currentRotor.bearings[i].station = Math.round(v);
+    else if (f === 'KR') currentRotor.bearings[i].KR = v / LB_IN_TO_N_MM;
     else currentRotor.bearings[i][f] = v;
   });
 }
@@ -572,7 +591,8 @@ function buildRotorFromUI() {
   currentRotor.options.rpmMax = parseFloat(document.getElementById('optRpmMax').value) || 90000;
   currentRotor.options.rpmIncr = parseFloat(document.getElementById('optRpmIncr').value) || 50;
   currentRotor.options.nCrits = parseInt(document.getElementById('optNCrits').value) || 15;
-  currentRotor.options.youngsMod = parseFloat(document.getElementById('optE').value) || E_DEFAULT;
+  const eGpa = parseFloat(document.getElementById('optE').value) || (E_DEFAULT * PSI_TO_GPA);
+  currentRotor.options.youngsMod = eGpa / PSI_TO_GPA;
   return currentRotor;
 }
 
@@ -613,25 +633,22 @@ function showResults() {
   document.getElementById('resultsPlaceholder').classList.add('hidden');
   document.getElementById('resultsArea').classList.remove('hidden');
 
-  // Summary cards
-  const sr = document.getElementById('summaryRow');
-  sr.innerHTML = '';
-  const addSummary = (val, lbl) => { sr.innerHTML += `<div class="summary-card"><div class="val">${val}</div><div class="lbl">${lbl}</div></div>`; };
-  addSummary(currentModes.length, 'Critical Speeds Found');
-  if (currentModes.length > 0) {
-    addSummary(currentModes[0].rpm.toFixed(1) + ' RPM', '1st Critical Speed');
-    addSummary(currentModes[currentModes.length-1].rpm.toFixed(1) + ' RPM', 'Highest Critical');
-  }
-
-  // Mode chips
-  const mr = document.getElementById('modeRow');
-  mr.innerHTML = '';
+  // Overview table with all modes
+  const tb = document.querySelector('#modesTable tbody');
+  tb.innerHTML = '';
   currentModes.forEach((m, i) => {
-    const div = document.createElement('div');
-    div.className = 'mode-chip' + (i === selectedModeIdx ? ' active' : '');
-    div.innerHTML = `<div class="num">Mode ${m.modeNumber}</div><div class="rpm">${m.rpm.toFixed(1)}</div><div class="hz">${m.hz.toFixed(2)} Hz</div>`;
-    div.onclick = () => { selectedModeIdx = i; updateModeChips(); showDetailTable(); };
-    mr.appendChild(div);
+    const tr = document.createElement('tr');
+    tr.className = i === selectedModeIdx ? 'active' : '';
+    tr.innerHTML = `<td>Mode ${m.modeNumber}</td><td>${m.rpm.toFixed(1)}</td><td>${m.hz.toFixed(2)}</td><td>${m.generalizedMass.toExponential(3)}</td><td>${m.effectiveMass.toExponential(3)}</td>`;
+    tr.onclick = () => {
+      selectedModeIdx = i;
+      document.querySelectorAll('#modesTable tbody tr').forEach((r, j) => r.className = j === i ? 'active' : '');
+      document.getElementById('detailModeSelect').value = i;
+      showDetailTable();
+      // Also select in plot
+      if (!plotSelectedModes.has(i)) { plotSelectedModes.add(i); updateModeSelectWrap(); updatePlot(); }
+    };
+    tb.appendChild(tr);
   });
 
   // Mode select for chart
@@ -645,12 +662,6 @@ function showResults() {
   sel.innerHTML = '';
   currentModes.forEach((m, i) => { sel.innerHTML += `<option value="${i}">Mode ${m.modeNumber}: ${m.rpm.toFixed(1)} RPM (${m.hz.toFixed(2)} Hz)</option>`; });
   showDetailTable();
-}
-
-function updateModeChips() {
-  document.querySelectorAll('.mode-chip').forEach((el, i) => {
-    el.className = 'mode-chip' + (i === selectedModeIdx ? ' active' : '');
-  });
 }
 
 function updateModeSelectWrap() {
@@ -679,7 +690,7 @@ function updatePlot() {
     const xs = [], ys = [], customSlope = [], customMoment = [], customShear = [];
     for (const st of m.stations) {
       if (st.type === 'station' || st.type === 'endpoint') {
-        xs.push(st.length); ys.push(st.displacement);
+        xs.push(st.length * IN_TO_MM); ys.push(st.displacement);
         customSlope.push(st.slope); customMoment.push(st.moment); customShear.push(st.shear);
       }
     }
@@ -689,7 +700,7 @@ function updatePlot() {
       line: { color: COLORS[idx % COLORS.length], width: 2 },
       marker: { size: 4 },
       customdata: customSlope.map((s,i) => [s, customMoment[i], customShear[i]]),
-      hovertemplate: '<b>Length</b>: %{x:.3f} in<br><b>Disp</b>: %{y:.6f}<br><b>Slope</b>: %{customdata[0]:.4E}<br><b>Moment</b>: %{customdata[1]:.4E}<br><b>Shear</b>: %{customdata[2]:.4E}<extra>%{fullData.name}</extra>',
+      hovertemplate: '<b>Length</b>: %{x:.1f} mm<br><b>Disp</b>: %{y:.6f}<br><b>Slope</b>: %{customdata[0]:.4E}<br><b>Moment</b>: %{customdata[1]:.4E}<br><b>Shear</b>: %{customdata[2]:.4E}<extra>%{fullData.name}</extra>',
     });
   }
 
@@ -699,19 +710,19 @@ function updatePlot() {
     for (const b of currentRotor.bearings) {
       let pos = 0;
       for (let i = 0; i < b.station && i < currentRotor.sections.length; i++) pos += currentRotor.sections[i].L;
-      brgPos.set(b.index, pos);
+      brgPos.set(b.index, pos * IN_TO_MM);
     }
     for (const [bIdx, pos] of brgPos) {
       shapes.push({ type:'line', x0:pos, x1:pos, y0:0, y1:1, yref:'paper', line:{dash:'dash', color:'rgba(255,255,255,0.4)'} });
       annotations.push({ x:pos, y:1, yref:'paper', text:`Brg ${bIdx}`, showarrow:false, font:{color:'rgba(255,255,255,0.7)',size:11}, yanchor:'bottom' });
     }
     // zero line
-    shapes.push({ type:'line', x0:0, x1:totalLength(), y0:0, y1:0, line:{dash:'dot', color:'rgba(255,255,255,0.2)'} });
+    shapes.push({ type:'line', x0:0, x1:totalLength()*IN_TO_MM, y0:0, y1:0, line:{dash:'dot', color:'rgba(255,255,255,0.2)'} });
   }
 
   Plotly.react('plotDiv', traces, {
     title: 'Mode Shape (Normalized Displacement)',
-    xaxis: { title:'Rotor Length (in)', rangeslider:{visible:true, thickness:0.05}, color:'#aaa', gridcolor:'#444' },
+    xaxis: { title:'Rotor Length (mm)', rangeslider:{visible:true, thickness:0.05}, color:'#aaa', gridcolor:'#444' },
     yaxis: { title:'Normalized Displacement', color:'#aaa', gridcolor:'#444' },
     paper_bgcolor: 'rgba(30,30,30,1)', plot_bgcolor: 'rgba(40,40,40,1)',
     font: { color:'#e0e0e0' },
@@ -730,7 +741,7 @@ function showDetailTable() {
   tb.innerHTML = '';
   for (const st of m.stations) {
     const tr = document.createElement('tr');
-    tr.innerHTML = `<td>${st.section}</td><td>${st.length.toFixed(3)}</td><td>${st.slope.toExponential(4)}</td><td>${st.displacement.toFixed(6)}</td><td>${st.moment.toExponential(4)}</td><td>${st.shear.toExponential(4)}</td><td>${st.type}</td><td>${st.reaction !== 0 ? st.reaction.toExponential(4) : ''}</td>`;
+    tr.innerHTML = `<td>${st.section}</td><td>${(st.length * IN_TO_MM).toFixed(1)}</td><td>${st.slope.toExponential(4)}</td><td>${st.displacement.toFixed(6)}</td><td>${st.moment.toExponential(4)}</td><td>${st.shear.toExponential(4)}</td><td>${st.type}</td><td>${st.reaction !== 0 ? st.reaction.toExponential(4) : ''}</td>`;
     tb.appendChild(tr);
   }
 }
@@ -739,9 +750,9 @@ function exportCSV() {
   const idx = parseInt(document.getElementById('detailModeSelect').value);
   if (idx < 0 || idx >= currentModes.length) return;
   const m = currentModes[idx];
-  let csv = 'Section,Length,Slope,Displacement,Moment,Shear,Type,Reaction\n';
+  let csv = 'Section,Length(mm),Slope,Displacement,Moment,Shear,Type,Reaction\n';
   for (const st of m.stations) {
-    csv += `${st.section},${st.length.toFixed(3)},${st.slope.toExponential(4)},${st.displacement.toFixed(6)},${st.moment.toExponential(4)},${st.shear.toExponential(4)},${st.type},${st.reaction !== 0 ? st.reaction.toExponential(4) : ''}\n`;
+    csv += `${st.section},${(st.length*IN_TO_MM).toFixed(1)},${st.slope.toExponential(4)},${st.displacement.toFixed(6)},${st.moment.toExponential(4)},${st.shear.toExponential(4)},${st.type},${st.reaction !== 0 ? st.reaction.toExponential(4) : ''}\n`;
   }
   const blob = new Blob([csv], {type:'text/csv'});
   const a = document.createElement('a');
@@ -941,7 +952,7 @@ function loadExample() {
   try {
     currentRotor = parseRin(exampleText);
     populateUI();
-    setStatus(`Example loaded: ${currentRotor.sections.length} sections, ${currentRotor.bearings.length} bearings, Total: ${totalWeight().toFixed(1)} lb, ${totalLength().toFixed(3)} in`);
+    setStatus(`Example loaded: ${currentRotor.sections.length} sections, ${currentRotor.bearings.length} bearings, Total: ${(totalWeight()*LB_TO_KG).toFixed(1)} kg, ${(totalLength()*IN_TO_MM).toFixed(1)} mm`);
   } catch(ex) {
     alert('Error loading example: ' + ex.message);
   }
