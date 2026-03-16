@@ -153,6 +153,7 @@ table.modes-tbl tr.active td { background: rgba(33,150,243,0.18); border-color: 
     <div id="resultsArea" class="hidden">
       <div class="card">
         <h3>Critical Speeds Overview</h3>
+        <div id="critPlotDiv" style="margin-bottom:12px"></div>
         <div class="modes-table-wrap">
           <table class="modes-tbl" id="modesTable">
             <thead><tr><th>Mode</th><th>RPM</th><th>Hz</th><th>Gen. Mass</th><th>Eff. Mass</th></tr></thead>
@@ -627,11 +628,67 @@ function runCalc() {
 }
 
 // ============================================================
+// UI: Critical Speed Distribution Chart
+// ============================================================
+function updateCritPlot() {
+  if (!currentModes.length) return;
+  const rpms = currentModes.map(m => m.rpm);
+  const labels = currentModes.map(m => `Mode ${m.modeNumber}`);
+  const hzLabels = currentModes.map(m => `${m.rpm.toFixed(1)} RPM<br>${m.hz.toFixed(2)} Hz`);
+
+  // Lollipop chart: vertical stems + markers on a horizontal RPM axis
+  const traces = [];
+
+  // Vertical stems (one shape per mode, drawn via a scatter trace with line segments)
+  for (let i = 0; i < rpms.length; i++) {
+    traces.push({
+      x: [rpms[i], rpms[i]], y: [0, 1],
+      mode: 'lines',
+      line: { color: COLORS[i % COLORS.length], width: 2 },
+      showlegend: false, hoverinfo: 'skip',
+    });
+  }
+
+  // Marker dots at top
+  traces.push({
+    x: rpms, y: rpms.map(() => 1),
+    mode: 'markers+text',
+    marker: { size: 12, color: rpms.map((_, i) => COLORS[i % COLORS.length]), line: { color: '#1e1e1e', width: 1.5 } },
+    text: labels,
+    textposition: 'top center',
+    textfont: { size: 10, color: '#bbb' },
+    customdata: hzLabels,
+    hovertemplate: '%{customdata}<extra></extra>',
+    showlegend: false,
+  });
+
+  const rpmMax = currentRotor ? currentRotor.options.rpmMax : rpms[rpms.length - 1] * 1.1;
+
+  Plotly.react('critPlotDiv', traces, {
+    xaxis: {
+      title: 'RPM',
+      range: [0, Math.min(rpmMax, rpms[rpms.length - 1] * 1.3)],
+      color: '#aaa', gridcolor: '#444',
+      zeroline: true, zerolinecolor: '#555',
+    },
+    yaxis: { visible: false, range: [-0.1, 1.6], fixedrange: true },
+    paper_bgcolor: 'rgba(30,30,30,1)',
+    plot_bgcolor: 'rgba(40,40,40,1)',
+    font: { color: '#e0e0e0' },
+    margin: { l: 50, r: 20, t: 10, b: 40 },
+    height: 140,
+  }, { responsive: true, displayModeBar: false });
+}
+
+// ============================================================
 // UI: Results
 // ============================================================
 function showResults() {
   document.getElementById('resultsPlaceholder').classList.add('hidden');
   document.getElementById('resultsArea').classList.remove('hidden');
+
+  // Critical speed distribution chart
+  updateCritPlot();
 
   // Overview table with all modes
   const tb = document.querySelector('#modesTable tbody');
