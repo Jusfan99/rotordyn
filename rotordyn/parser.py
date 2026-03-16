@@ -4,13 +4,25 @@ from .config import E_DEFAULT
 from .models import Bearing, Rotor, RotorOptions, ShaftSection
 
 
+def _is_options_line(text: str) -> bool:
+    """Check if a line is the options line (10 space-separated numeric values)."""
+    parts = text.split()
+    if len(parts) < 10:
+        return False
+    try:
+        for p in parts[:10]:
+            float(p)
+        return True
+    except ValueError:
+        return False
+
+
 def parse_rin(path: str) -> Rotor:
     """Parse a rin input file and return a Rotor model.
 
     File format:
-      Line 1: title (cols 1-70), flags at right
-      Line 2: description (cols 1-70), termination code at right
-      Line 3: 10 space-separated option values
+      Header lines: title, description, and optional extra text lines
+      Options line: 10 space-separated numeric values (auto-detected)
       Remaining lines:
         - Section data: I  W  L  [gap]  D  (D at ~col 58+)
         - Bearing data: 0.0  KR  (two values, first is 0.0)
@@ -19,14 +31,23 @@ def parse_rin(path: str) -> Rotor:
     with open(path) as f:
         lines = f.readlines()
 
-    # Line 1: title
-    title = lines[0][:70].strip()
+    # Auto-detect the options line (first line with 10+ numeric tokens).
+    # Everything before it is treated as header text (title + description).
+    opts_idx = None
+    for i, line in enumerate(lines):
+        if _is_options_line(line.strip()):
+            opts_idx = i
+            break
 
-    # Line 2: description
-    description = lines[1][:70].strip()
+    if opts_idx is None:
+        raise ValueError("No options line found (expected 10 numeric values)")
 
-    # Line 3: options
-    opts_line = lines[2].strip()
+    # Collect header lines before the options line
+    header_lines = [lines[j][:70].strip() for j in range(opts_idx) if lines[j].strip()]
+    title = header_lines[0] if len(header_lines) > 0 else ""
+    description = header_lines[1] if len(header_lines) > 1 else ""
+
+    opts_line = lines[opts_idx].strip()
     opts_parts = opts_line.split()
     # Last value may be -1 (use default E) or a positive value (custom E)
     damp_flag = int(float(opts_parts[0]))
@@ -59,7 +80,7 @@ def parse_rin(path: str) -> Rotor:
     section_idx = 0
     bearing_idx = 0
 
-    for line in lines[3:]:
+    for line in lines[opts_idx + 1:]:
         stripped = line.strip()
         if not stripped:
             continue
