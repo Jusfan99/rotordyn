@@ -202,11 +202,6 @@ const LB_TO_KG = 0.453592;    // lb → kg
 const IN_TO_MM = 25.4;         // in → mm
 const LB_IN_TO_N_MM = 0.17513; // lb/in → N/mm
 const PSI_TO_GPA = 6.89476e-6; // psi → GPa
-const RHO_STEEL_LB_IN3 = 0.2836; // steel density lb/in³ (7850 kg/m³)
-
-// Auto-calc I and W from D and L (solid circular cross-section, steel)
-function calcI_from_D(D_in) { return Math.PI / 64 * Math.pow(D_in, 4); }
-function calcW_from_DL(D_in, L_in) { return RHO_STEEL_LB_IN3 * Math.PI / 4 * D_in * D_in * L_in; }
 
 // ============================================================
 // Matrix helpers (4x4 only)
@@ -527,29 +522,17 @@ function renderSecTable() {
   for (const s of currentRotor.sections) {
     const tr = document.createElement('tr');
     // Display in metric: I→cm⁴, W→kg, L→mm, D→mm
-    // I and W have lighter color to hint they're auto-derived
-    tr.innerHTML = `<td>${s.index}</td><td><input value="${(s.I * IN4_TO_CM4).toPrecision(6)}" data-i="${s.index-1}" data-f="I" style="color:#888"></td><td><input value="${(s.W * LB_TO_KG).toPrecision(6)}" data-i="${s.index-1}" data-f="W" style="color:#888"></td><td><input value="${(s.L * IN_TO_MM).toPrecision(6)}" data-i="${s.index-1}" data-f="L"></td><td><input value="${(s.D * IN_TO_MM).toPrecision(6)}" data-i="${s.index-1}" data-f="D"></td>`;
+    tr.innerHTML = `<td>${s.index}</td><td><input value="${(s.I * IN4_TO_CM4).toPrecision(6)}" data-i="${s.index-1}" data-f="I"></td><td><input value="${(s.W * LB_TO_KG).toPrecision(6)}" data-i="${s.index-1}" data-f="W"></td><td><input value="${(s.L * IN_TO_MM).toPrecision(6)}" data-i="${s.index-1}" data-f="L"></td><td><input value="${(s.D * IN_TO_MM).toPrecision(6)}" data-i="${s.index-1}" data-f="D"></td>`;
     tb.appendChild(tr);
   }
   tb.querySelectorAll('input').forEach(inp => inp.onchange = function() {
-    const idx = parseInt(this.dataset.i), f = this.dataset.f;
+    const i = parseInt(this.dataset.i), f = this.dataset.f;
     const v = parseFloat(this.value) || 0;
-    const sec = currentRotor.sections[idx];
-    if (f === 'I') { sec.I = v / IN4_TO_CM4; }
-    else if (f === 'W') { sec.W = v / LB_TO_KG; }
-    else if (f === 'L') {
-      sec.L = v / IN_TO_MM;
-      // Auto-recalc W from new L and current D
-      sec.W = calcW_from_DL(sec.D, sec.L);
-      renderSecTable(); // refresh to show updated W
-    }
-    else if (f === 'D') {
-      sec.D = v / IN_TO_MM;
-      // Auto-recalc I and W from new D (and current L)
-      sec.I = calcI_from_D(sec.D);
-      sec.W = calcW_from_DL(sec.D, sec.L);
-      renderSecTable(); // refresh to show updated I and W
-    }
+    // Convert metric input back to internal imperial
+    if (f === 'I') currentRotor.sections[i].I = v / IN4_TO_CM4;
+    else if (f === 'W') currentRotor.sections[i].W = v / LB_TO_KG;
+    else if (f === 'L') currentRotor.sections[i].L = v / IN_TO_MM;
+    else if (f === 'D') currentRotor.sections[i].D = v / IN_TO_MM;
   });
 }
 
