@@ -879,15 +879,17 @@ function updatePlot() {
     xaxis: { title: 'Rotor Length (mm)', color: '#aaa', gridcolor: '#444', zeroline: false },
     yaxis2: {
       overlaying: 'y', side: 'left',
+      title: 'Radius (mm)',
       range: [-yRange, yRange],
-      showticklabels: false, showgrid: false, zeroline: false,
+      color: '#aaa', gridcolor: 'rgba(255,255,255,0.06)',
+      zeroline: true, zerolinecolor: 'rgba(255,255,255,0.15)',
       fixedrange: true,
     },
     yaxis: { visible: false, fixedrange: true },
     paper_bgcolor: 'rgba(30,30,30,1)', plot_bgcolor: 'rgba(40,40,40,1)',
     font: { color: '#e0e0e0' },
     legend: { yanchor: 'top', y: 0.99, xanchor: 'right', x: 0.99 },
-    margin: { l: 30, r: 20, t: 50, b: 50 },
+    margin: { l: 60, r: 20, t: 50, b: 50 },
     height: 500,
   }, { responsive: true });
 }
